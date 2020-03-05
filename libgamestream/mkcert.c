@@ -42,7 +42,9 @@ CERT_KEY_PAIR mkcert_generate() {
     CRYPTO_mem_ctrl(CRYPTO_MEM_CHECK_ON);
     bio_err = BIO_new_fp(stderr, BIO_NOCLOSE);
     
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
     SSLeay_add_all_algorithms();
+#endif
     ERR_load_crypto_strings();
     
     mkcert(&x509, &pkey, NUM_BITS, SERIAL, NUM_YEARS);
@@ -54,7 +56,9 @@ CERT_KEY_PAIR mkcert_generate() {
 #endif
     CRYPTO_cleanup_all_ex_data();
     
+#ifndef OPENSSL_NO_CRYPTO_MDEBUG
     CRYPTO_mem_leaks(bio_err);
+#endif
     BIO_free(bio_err);
     
     return (CERT_KEY_PAIR) {x509, pkey, p12};

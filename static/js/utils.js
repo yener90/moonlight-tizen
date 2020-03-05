@@ -1,3 +1,13 @@
+function runningOnChrome() {
+  try {
+      if (chrome) {
+          return true;
+      }
+  } catch (e) {}
+
+  return false;
+}
+
 function guuid() {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
     var r = Math.random() * 16 | 0,
@@ -408,7 +418,7 @@ NvHTTP.prototype = {
   // returns the box art of the given appID.
   // three layers of response time are possible: memory cached (in javascript), storage cached (in chrome.storage.local), and streamed (host sends binary over the network)
   getBoxArt: function(appId) {
-    if (chrome.storage) {
+    if (runningOnChrome()) {
       // This may be bad practice to push/pull this much data through local storage?
       return new Promise(function(resolve, reject) {
         chrome.storage.local.get('boxart-' + appId, function(storageData) {
@@ -449,14 +459,31 @@ NvHTTP.prototype = {
 
     } else { // shouldn't run because we always have chrome.storage, but I'm not going to antagonize other browsers
       console.warn('%c[utils.js, utils.js,  getBoxArt]', 'color: gray;', 'chrome.storage not detected! Box art will not be saved!');
-      return sendMessage('openUrl', [
-        this._baseUrlHttps +
-        '/appasset?' + this._buildUidStr() +
-        '&appid=' + appId +
-        '&AssetType=2&AssetIdx=0',
-        this.ppkstr,
-        true
-      ]);
+      return new Promise((resolve, reject) => {
+        sendMessage('openUrl', [
+          this._baseUrlHttps +
+          '/appasset?' + this._buildUidStr() +
+          '&appid=' + appId +
+          '&AssetType=2&AssetIdx=0',
+          this.ppkstr,
+          true
+        ]).then((boxArtBuffer) => {
+          var reader = new FileReader();
+          reader.onloadend = function() {
+            var obj = {};
+            obj['boxart-' + appId] = this.result;
+            console.log('%c[utils.js, utils.js,  getBoxArt]', 'color: gray;', 'Returning network-fetched box art');
+            resolve(this.result);
+          }
+          reader.readAsDataURL(new Blob([boxArtBuffer], {
+            type: "image/png"
+          }));
+        }, (error) => {
+          console.error('%c[utils.js, utils.js,  getBoxArt]', 'color: gray;', 'Box-art request failed!', error);
+          reject(error);
+          return;
+        });
+      });
     }
   },
 

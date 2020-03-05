@@ -1,4 +1,8 @@
+#ifdef __EMSCRIPTEN__
+#include "moonlight_wasm.hpp"
+#else
 #include "moonlight.hpp"
+#endif
 
 #include <stdio.h>
 
