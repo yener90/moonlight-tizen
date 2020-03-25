@@ -14,12 +14,12 @@
 
 #include "lib.hpp"
 
-#include "html/elementary_media_stream_source/elementary_media_stream_source.h"
-#include "html/elementary_media_stream_source/elementary_media_stream_source_listener.h"
-#include "html/elementary_media_stream_source/elementary_media_track.h"
-#include "html/elementary_media_stream_source/elementary_media_track_listener.h"
-#include "html/html_media_element.h"
-#include "html/html_media_element_listener.h"
+#include "samsung/wasm/elementary_media_stream_source.h"
+#include "samsung/wasm/elementary_media_stream_source_listener.h"
+#include "samsung/wasm/elementary_media_track.h"
+#include "samsung/wasm/elementary_media_track_listener.h"
+#include "samsung/html/html_media_element.h"
+#include "samsung/html/html_media_element_listener.h"
 
 // Uncomment this line to enable the profiling infrastructure
 // #define ENABLE_PROFILING 1
@@ -143,7 +143,7 @@ class MoonlightInstance {
   LoadResult LoadCert(const char* certStr, const char* keyStr);
 
  private:
-  using EmssReadyState = Samsung::HTML::ElementaryMediaStreamSource::ReadyState;
+  using EmssReadyState = samsung::wasm::ElementaryMediaStreamSource::ReadyState;
 
   void OpenUrl_private(int callbackId, std::string url, std::string ppk,
                        bool binaryResponse);
@@ -193,9 +193,11 @@ class MoonlightInstance {
   EmssReadyState m_EmssReadyState;
   std::atomic<bool> m_AudioStarted;
   std::atomic<bool> m_VideoStarted;
+  std::atomic<uint32_t> m_AudioSessionId;
+  std::atomic<uint32_t> m_VideoSessionId;
 
   class ElementaryMediaStreamSourceListener
-      : public Samsung::HTML::ElementaryMediaStreamSourceListener {
+      : public samsung::wasm::ElementaryMediaStreamSourceListener {
    public:
     ElementaryMediaStreamSourceListener(MoonlightInstance* instance)
         : m_Instance(instance) {}
@@ -221,7 +223,7 @@ class MoonlightInstance {
     MoonlightInstance* m_Instance;
   };
 
-  class MediaElementListener : public Samsung::HTML::HTMLMediaElementListener {
+  class MediaElementListener : public samsung::html::HTMLMediaElementListener {
    public:
     MediaElementListener(MoonlightInstance* i) : m_Instance(i) {}
     void OnPlay() override {
@@ -236,7 +238,7 @@ class MoonlightInstance {
   };
 
   class AudioTrackListener
-      : public Samsung::HTML::ElementaryMediaTrackListener {
+      : public samsung::wasm::ElementaryMediaTrackListener {
    public:
     AudioTrackListener(MoonlightInstance* i) : m_Instance(i) {}
     void OnTrackOpen() override {
@@ -246,10 +248,17 @@ class MoonlightInstance {
       m_Instance->m_EmssAudioStateChanged.notify_all();
     }
 
-    void OnTrackClosed() override {
+    void OnTrackClosed(
+        samsung::wasm::ElementaryMediaTrack::CloseReason) override {
       ClLogMessage("AUDIO ElementaryMediaTrack::OnTrackClosed\n");
       std::unique_lock<std::mutex> lock(m_Instance->m_Mutex);
       m_Instance->m_AudioStarted = false;
+    }
+
+    void OnSessionIdChanged(uint32_t new_session_id) override {
+      ClLogMessage("AUDIO ElementaryMediaTrack::OnSessionIdChanged\n");
+      std::unique_lock<std::mutex> lock(m_Instance->m_Mutex);
+      m_Instance->m_AudioSessionId.store(new_session_id);
     }
 
    private:
@@ -257,7 +266,7 @@ class MoonlightInstance {
   };
 
   class VideoTrackListener
-      : public Samsung::HTML::ElementaryMediaTrackListener {
+      : public samsung::wasm::ElementaryMediaTrackListener {
    public:
     VideoTrackListener(MoonlightInstance* i) : m_Instance(i) {}
       void OnTrackOpen() override {
@@ -268,10 +277,17 @@ class MoonlightInstance {
         m_Instance->m_EmssVideoStateChanged.notify_all();
       }
 
-    void OnTrackClosed() override {
+    void OnTrackClosed(
+        samsung::wasm::ElementaryMediaTrack::CloseReason) override {
       ClLogMessage("VIDEO ElementaryMediaTrack::OnTrackClosed\n");
       std::unique_lock<std::mutex> lock(m_Instance->m_Mutex);
       m_Instance->m_VideoStarted = false;
+    }
+
+    void OnSessionIdChanged(uint32_t new_session_id) override {
+      ClLogMessage("VIDEO ElementaryMediaTrack::OnSessionIdChanged\n");
+      std::unique_lock<std::mutex> lock(m_Instance->m_Mutex);
+      m_Instance->m_VideoSessionId.store(new_session_id);
     }
 
    private:
@@ -284,14 +300,14 @@ class MoonlightInstance {
     variable->wait(lock, condition);
   }
 
-  Samsung::HTML::HTMLMediaElement m_MediaElement;
-  Samsung::HTML::ElementaryMediaStreamSource m_Source;
+  samsung::html::HTMLMediaElement m_MediaElement;
+  samsung::wasm::ElementaryMediaStreamSource m_Source;
   ElementaryMediaStreamSourceListener m_SourceListener;
   MediaElementListener m_MediaElementListener;
   AudioTrackListener m_AudioTrackListener;
   VideoTrackListener m_VideoTrackListener;
-  Samsung::HTML::ElementaryMediaTrack m_VideoTrack;
-  Samsung::HTML::ElementaryMediaTrack m_AudioTrack;
+  samsung::wasm::ElementaryMediaTrack m_VideoTrack;
+  samsung::wasm::ElementaryMediaTrack m_AudioTrack;
 };
 
 extern MoonlightInstance* g_Instance;

@@ -49,9 +49,11 @@ MoonlightInstance::MoonlightInstance()
       m_EmssReadyState(EmssReadyState::kDetached),
       m_AudioStarted(false),
       m_VideoStarted(false),
+      m_AudioSessionId(0),
+      m_VideoSessionId(0),
       m_MediaElement("nacl_module"),
       m_Source(
-          Samsung::HTML::ElementaryMediaStreamSource::Mode::kLowLatency),
+          samsung::wasm::ElementaryMediaStreamSource::Mode::kLowLatency),
       m_SourceListener(this),
       m_MediaElementListener(this),
       m_AudioTrackListener(this),

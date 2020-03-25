@@ -2,11 +2,11 @@
 
 #include <chrono>
 
-#include "html/elementary_media_stream_source/elementary_media_packet.h"
+#include "samsung/wasm/elementary_media_packet.h"
 
 using std::chrono_literals::operator""s;
 using std::chrono_literals::operator""ms;
-using TimeStamp = std::chrono::duration<double>;
+using TimeStamp = samsung::wasm::Seconds;
 
 #define MAX_CHANNEL_COUNT 2
 #ifdef SLOW_AUDIO_DECODER
@@ -33,7 +33,8 @@ static inline TimeStamp FrameDuration(double samplesPerFrame,
   return TimeStamp(samplesPerFrame / sampleRate);
 }
 
-static void DecodeAndAppendPacket(Samsung::HTML::ElementaryMediaTrack* track,
+static void DecodeAndAppendPacket(samsung::wasm::ElementaryMediaTrack* track,
+                                  uint32_t session_id,
                                   OpusMSDecoder* decoder,
                                   const unsigned char* sampleData,
                                   int sampleLength) {
@@ -46,17 +47,18 @@ static void DecodeAndAppendPacket(Samsung::HTML::ElementaryMediaTrack* track,
   if (decodeLen <= 0)
     s_DecodeBuffer.assign(s_DecodeBuffer.size(), 0);
 
-  Samsung::HTML::ElementaryMediaPacket pkt{
-     s_pktPts.count(),
-     s_pktPts.count(),
-     s_frameDuration.count(),
+  samsung::wasm::ElementaryMediaPacket pkt{
+     s_pktPts,
+     s_pktPts,
+     s_frameDuration,
      true,
      s_DecodeBuffer.size() * sizeof(opus_int16),
      s_DecodeBuffer.data(),
      0,
      0,
      0,
-     1
+     1,
+     session_id
   };
 
   track->AppendPacket(pkt);
@@ -111,13 +113,19 @@ void MoonlightInstance::AudDecDecodeAndPlaySample(char* sampleData,
     return;
   }
 
-  DecodeAndAppendPacket(&g_Instance->m_AudioTrack,
-                        g_Instance->m_OpusDecoder,
-                        reinterpret_cast<unsigned char*>(sampleData),
-                        sampleLength);
+  try {
+    DecodeAndAppendPacket(&g_Instance->m_AudioTrack,
+                          g_Instance->m_AudioSessionId.load(),
+                          g_Instance->m_OpusDecoder,
+                          reinterpret_cast<unsigned char*>(sampleData),
+                          sampleLength);
+    s_pktPts += s_frameDuration;
+  } catch(const std::exception& ex) {
+    ClLogMessage("Append audio packet failed: %s\n", ex.what());
+  }
+
   s_estimatedAudioEnd =
       std::max(s_estimatedAudioEnd, ntp) + s_frameDuration;
-  s_pktPts += s_frameDuration;
 }
 
 AUDIO_RENDERER_CALLBACKS MoonlightInstance::s_ArCallbacks = {

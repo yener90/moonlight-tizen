@@ -8,20 +8,24 @@
 
 #include <pthread.h>
 
-#include "html/elementary_media_stream_source/elementary_audio_stream_track_config.h"
-#include "html/elementary_media_stream_source/elementary_media_packet.h"
-#include "html/elementary_media_stream_source/elementary_video_stream_track_config.h"
-#include "html/html_media_element_listener.h"
+#include "samsung/wasm/elementary_audio_track_config.h"
+#include "samsung/wasm/elementary_media_packet.h"
+#include "samsung/wasm/elementary_video_track_config.h"
+#include "samsung/html/html_media_element_listener.h"
 
 #define INITIAL_DECODE_BUFFER_LEN 128 * 1024
 
 using std::chrono_literals::operator""s;
 using std::chrono_literals::operator""ms;
-using EmssReadyState = Samsung::HTML::ElementaryMediaStreamSource::ReadyState;
-using TimeStamp = std::chrono::duration<double>;
+using EmssReadyState = samsung::wasm::ElementaryMediaStreamSource::ReadyState;
+using EmssAsyncResult
+    = samsung::wasm::ElementaryMediaStreamSource::AsyncOperationResult;
+using HTMLAsyncResult = samsung::html::HTMLMediaElement::AsyncOperationResult;
+using TimeStamp = samsung::wasm::Seconds;
 
 static constexpr TimeStamp kFrameTimeMargin = 0.5ms;
 static constexpr TimeStamp kTimeWindow = 1s;
+static constexpr uint32_t kSampleRate = 48000;
 
 static bool s_FramePacingEnabled = false;
 
@@ -56,7 +60,7 @@ bool MoonlightInstance::InitializeRenderingSurface(int width, int height) {
 int MoonlightInstance::StartupVidDecSetup(int videoFormat, int width,
                                           int height, int redrawRate,
                                           void* context, int drFlags) {
-  g_Instance->m_MediaElement.SetSrc(g_Instance->m_Source.CreateObjectURL());
+  g_Instance->m_MediaElement.SetSrc(&g_Instance->m_Source);
   ClLogMessage("Waiting for closed\n");
   g_Instance->waitFor(&g_Instance->m_EmssStateChanged, [] {
       return g_Instance->m_EmssReadyState == EmssReadyState::kClosed;
@@ -64,18 +68,18 @@ int MoonlightInstance::StartupVidDecSetup(int videoFormat, int width,
   ClLogMessage("closed done\n");
 
   g_Instance->m_AudioTrack = g_Instance->m_Source.AddTrack(
-      Samsung::HTML::ElementaryAudioStreamTrackConfig {
+      samsung::wasm::ElementaryAudioTrackConfig {
           "audio/webm; codecs=\"pcm\"",  // mimeType
           {},  // extradata (empty?)
-          Samsung::HTML::SampleFormat::SampleFormatS16,
-          Samsung::HTML::ChannelLayout::ChannelLayoutStereo,
-          48000
+          samsung::wasm::SampleFormat::kS16,
+          samsung::wasm::ChannelLayout::kStereo,
+          kSampleRate
   });
 
   g_Instance->m_AudioTrack.SetListener(&g_Instance->m_AudioTrackListener);
 
   g_Instance->m_VideoTrack = g_Instance->m_Source.AddTrack(
-      Samsung::HTML::ElementaryVideoStreamTrackConfig{
+      samsung::wasm::ElementaryVideoTrackConfig{
           "video/mp4; codecs=\"hev1.1.6.L93.B0\"",  // h265 mimeType
           {},                                   // extradata (empty?)
           static_cast<uint32_t>(width),
@@ -87,14 +91,14 @@ int MoonlightInstance::StartupVidDecSetup(int videoFormat, int width,
   g_Instance->m_VideoTrack.SetListener(&g_Instance->m_VideoTrackListener);
 
   ClLogMessage("Inb4 source open\n");
-  g_Instance->m_Source.Open([](const char*) {});
+  g_Instance->m_Source.Open([](EmssAsyncResult){});
   g_Instance->waitFor(&g_Instance->m_EmssStateChanged, [] {
       return g_Instance->m_EmssReadyState == EmssReadyState::kOpenPending;
   });
   ClLogMessage("Source ready to open\n");
-  g_Instance->m_MediaElement.Play([](const char* err) {
-    if (err) {
-      ClLogMessage("Play error: %s\n", err);
+  g_Instance->m_MediaElement.Play([](HTMLAsyncResult err) {
+    if (err != HTMLAsyncResult::kSuccess) {
+      ClLogMessage("Play error\n");
     } else {
       ClLogMessage("Play success\n");
     }
@@ -190,15 +194,27 @@ int MoonlightInstance::VidDecSubmitDecodeUnit(PDECODE_UNIT decodeUnit) {
 
   // Start the decoding
   uint32_t packedMillis = ProfilerGetPackedMillis();
-  Samsung::HTML::ElementaryMediaPacket pkt{
-      s_pktPts.count(),        s_pktPts.count(),
-      s_frameDuration.count(), decodeUnit->frameType == FRAME_TYPE_IDR,
-      offset,          s_DecodeBuffer.data(),
-      s_Width,         s_Height,
-      s_Framerate,     1};
-  g_Instance->m_VideoTrack.AppendPacket(pkt);
+  samsung::wasm::ElementaryMediaPacket pkt{
+      s_pktPts,
+      s_pktPts,
+      s_frameDuration,
+      decodeUnit->frameType == FRAME_TYPE_IDR,
+      offset,
+      s_DecodeBuffer.data(),
+      s_Width,
+      s_Height,
+      s_Framerate,
+      1,
+      g_Instance->m_VideoSessionId.load()
+  };
 
-  s_pktPts += s_frameDuration;
+  try {
+    g_Instance->m_VideoTrack.AppendPacket(pkt);
+    s_pktPts += s_frameDuration;
+  } catch (const std::exception& ex) {
+    ClLogMessage("Append video packet failed %s\n", ex.what());
+    return DR_NEED_IDR;
+  }
 
   return DR_OK;
 }
