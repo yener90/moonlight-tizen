@@ -61,7 +61,11 @@ static void DecodeAndAppendPacket(samsung::wasm::ElementaryMediaTrack* track,
      session_id
   };
 
-  track->AppendPacket(pkt);
+  if (track->AppendPacket(pkt)) {
+    s_pktPts += s_frameDuration;
+  } else {
+    MoonlightInstance::ClLogMessage("Append audio packet failed\n");
+  }
 }
 
 int MoonlightInstance::AudDecInit(int audioConfiguration,
@@ -113,17 +117,11 @@ void MoonlightInstance::AudDecDecodeAndPlaySample(char* sampleData,
     return;
   }
 
-  try {
-    DecodeAndAppendPacket(&g_Instance->m_AudioTrack,
-                          g_Instance->m_AudioSessionId.load(),
-                          g_Instance->m_OpusDecoder,
-                          reinterpret_cast<unsigned char*>(sampleData),
-                          sampleLength);
-    s_pktPts += s_frameDuration;
-  } catch(const std::exception& ex) {
-    ClLogMessage("Append audio packet failed: %s\n", ex.what());
-  }
-
+  DecodeAndAppendPacket(&g_Instance->m_AudioTrack,
+                        g_Instance->m_AudioSessionId.load(),
+                        g_Instance->m_OpusDecoder,
+                        reinterpret_cast<unsigned char*>(sampleData),
+                        sampleLength);
   s_estimatedAudioEnd =
       std::max(s_estimatedAudioEnd, ntp) + s_frameDuration;
 }

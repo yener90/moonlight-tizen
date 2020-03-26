@@ -67,18 +67,23 @@ int MoonlightInstance::StartupVidDecSetup(int videoFormat, int width,
   });
   ClLogMessage("closed done\n");
 
-  g_Instance->m_AudioTrack = g_Instance->m_Source.AddTrack(
-      samsung::wasm::ElementaryAudioTrackConfig {
-          "audio/webm; codecs=\"pcm\"",  // mimeType
-          {},  // extradata (empty?)
-          samsung::wasm::SampleFormat::kS16,
-          samsung::wasm::ChannelLayout::kStereo,
-          kSampleRate
-  });
+  {
+    auto add_track_result = g_Instance->m_Source.AddTrack(
+        samsung::wasm::ElementaryAudioTrackConfig {
+            "audio/webm; codecs=\"pcm\"",  // mimeType
+            {},  // extradata (empty?)
+            samsung::wasm::SampleFormat::kS16,
+            samsung::wasm::ChannelLayout::kStereo,
+            kSampleRate
+      });
+    if (add_track_result) {
+      g_Instance->m_AudioTrack = std::move(*add_track_result);
+      g_Instance->m_AudioTrack.SetListener(&g_Instance->m_AudioTrackListener);
+    }
+  }
 
-  g_Instance->m_AudioTrack.SetListener(&g_Instance->m_AudioTrackListener);
-
-  g_Instance->m_VideoTrack = g_Instance->m_Source.AddTrack(
+  {
+    auto add_track_result = g_Instance->m_Source.AddTrack(
       samsung::wasm::ElementaryVideoTrackConfig{
           "video/mp4; codecs=\"hev1.1.6.L93.B0\"",  // h265 mimeType
           {},                                   // extradata (empty?)
@@ -87,8 +92,11 @@ int MoonlightInstance::StartupVidDecSetup(int videoFormat, int width,
           static_cast<uint32_t>(redrawRate),  // framerateNum
           1,                                  // framerateDen
       });
-
-  g_Instance->m_VideoTrack.SetListener(&g_Instance->m_VideoTrackListener);
+    if (add_track_result) {
+      g_Instance->m_VideoTrack = std::move(*add_track_result);
+      g_Instance->m_VideoTrack.SetListener(&g_Instance->m_VideoTrackListener);
+    }
+  }
 
   ClLogMessage("Inb4 source open\n");
   g_Instance->m_Source.Open([](EmssAsyncResult){});
@@ -208,11 +216,10 @@ int MoonlightInstance::VidDecSubmitDecodeUnit(PDECODE_UNIT decodeUnit) {
       g_Instance->m_VideoSessionId.load()
   };
 
-  try {
-    g_Instance->m_VideoTrack.AppendPacket(pkt);
+  if (g_Instance->m_VideoTrack.AppendPacket(pkt)) {
     s_pktPts += s_frameDuration;
-  } catch (const std::exception& ex) {
-    ClLogMessage("Append video packet failed %s\n", ex.what());
+  } else {
+    ClLogMessage("Append video packet failed\n");
     return DR_NEED_IDR;
   }
 
