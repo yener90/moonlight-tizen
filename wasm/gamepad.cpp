@@ -47,8 +47,8 @@ static short GetButtonFlags(const EmscriptenGamepadEvent& gamepad) {
       UP_FLAG, DOWN_FLAG, LEFT_FLAG, RIGHT_FLAG,
       SPECIAL_FLAG,
   };
-  static const size_t buttonMasksSize =
-    sizeof(buttonMasks) / sizeof(buttonMasks[0]);
+  static const int buttonMasksSize =
+    static_cast<int>(sizeof(buttonMasks) / sizeof(buttonMasks[0]));
 
   short result = 0;
   for (int i = 0; i < gamepad.numButtons && i < buttonMasksSize; ++i) {

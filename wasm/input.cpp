@@ -168,6 +168,7 @@ EM_BOOL handlePointerLockError(int eventType,
                                const void *reserved,
                                void *userData) {
   g_Instance->DidLockMouse(eventType);
+  return true;
 }
 
 void MoonlightInstance::ReportMouseMovement() {

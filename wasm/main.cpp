@@ -43,8 +43,8 @@ MoonlightInstance::MoonlightInstance()
       m_HttpThreadPoolSequence(0),
       m_Dispatcher("Curl"),
       m_Mutex(),
-      m_EmssAudioStateChanged(),
       m_EmssStateChanged(),
+      m_EmssAudioStateChanged(),
       m_EmssVideoStateChanged(),
       m_EmssReadyState(EmssReadyState::kDetached),
       m_AudioStarted(false),
@@ -55,7 +55,6 @@ MoonlightInstance::MoonlightInstance()
       m_Source(
           samsung::wasm::ElementaryMediaStreamSource::Mode::kLowLatency),
       m_SourceListener(this),
-      m_MediaElementListener(this),
       m_AudioTrackListener(this),
       m_VideoTrackListener(this),
       m_VideoTrack(),
@@ -169,8 +168,8 @@ void* MoonlightInstance::ConnectionThreadFunc(void* context) {
   return NULL;
 }
 
-static void hexStringToBytes(const char* str, char* output) {
-  for (int i = 0; i < strlen(str); i += 2) {
+static void HexStringToBytes(const char* str, char* output) {
+  for (size_t i = 0; i < strlen(str); i += 2) {
     sscanf(&str[i], "%2hhx", &output[i / 2]);
   }
 }
@@ -205,7 +204,7 @@ MessageResult MoonlightInstance::StartStream(
   m_StreamConfig.enableHdr = true;
 
   // Load the rikey and rikeyid into the stream configuration
-  hexStringToBytes(rikey.c_str(), m_StreamConfig.remoteInputAesKey);
+  HexStringToBytes(rikey.c_str(), m_StreamConfig.remoteInputAesKey);
   int rikeyiv = htonl(stoi(rikeyid));
   memcpy(m_StreamConfig.remoteInputAesIv, &rikeyiv, sizeof(rikeyiv));
 

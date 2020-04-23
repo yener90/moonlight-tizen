@@ -62,7 +62,7 @@ LoadResult MoonlightInstance::LoadCert(const char* certStr,
 
   // Convert the PEM cert to hex
   g_CertHex = reinterpret_cast<char*>(malloc((strlen(certStr) * 2) + 1));
-  for (int i = 0; i < strlen(certStr); i++) {
+  for (size_t i = 0; i < strlen(certStr); i++) {
     sprintf(&g_CertHex[i * 2], "%02x", certStr[i]);
   }
 

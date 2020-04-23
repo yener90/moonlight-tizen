@@ -144,6 +144,46 @@ class MoonlightInstance {
 
  private:
   using EmssReadyState = samsung::wasm::ElementaryMediaStreamSource::ReadyState;
+  using EmssTrackCloseReason = samsung::wasm::ElementaryMediaTrack::CloseReason;
+
+  class SourceListener
+      : public samsung::wasm::ElementaryMediaStreamSourceListener {
+   public:
+    SourceListener(MoonlightInstance* instance);
+    void OnSourceClosed() override;
+    void OnSourceOpenPending() override;
+    void OnSourceOpen() override;
+
+   private:
+    MoonlightInstance* m_Instance;
+  };
+
+  class AudioTrackListener
+      : public samsung::wasm::ElementaryMediaTrackListener {
+   public:
+    AudioTrackListener(MoonlightInstance* instance);
+    void OnTrackOpen() override;
+    void OnTrackClosed(EmssTrackCloseReason) override;
+    void OnSessionIdChanged(uint32_t new_session_id) override;
+
+   private:
+    MoonlightInstance* m_Instance;
+  };
+
+  class VideoTrackListener
+      : public samsung::wasm::ElementaryMediaTrackListener {
+   public:
+    VideoTrackListener(MoonlightInstance* instance);
+    void OnTrackOpen() override;
+    void OnTrackClosed(EmssTrackCloseReason) override;
+    void OnSessionIdChanged(uint32_t new_session_id) override;
+
+   private:
+    MoonlightInstance* m_Instance;
+  };
+
+  void WaitFor(std::condition_variable* variable,
+               std::function<bool()> condition);
 
   void OpenUrl_private(int callbackId, std::string url, std::string ppk,
                        bool binaryResponse);
@@ -195,115 +235,9 @@ class MoonlightInstance {
   std::atomic<bool> m_VideoStarted;
   std::atomic<uint32_t> m_AudioSessionId;
   std::atomic<uint32_t> m_VideoSessionId;
-
-  class ElementaryMediaStreamSourceListener
-      : public samsung::wasm::ElementaryMediaStreamSourceListener {
-   public:
-    ElementaryMediaStreamSourceListener(MoonlightInstance* instance)
-        : m_Instance(instance) {}
-    void OnSourceClosed() override {
-      ClLogMessage("EMSS::OnClosed\n");
-      std::unique_lock<std::mutex> lock(m_Instance->m_Mutex);
-      m_Instance->m_EmssReadyState = EmssReadyState::kClosed;
-      m_Instance->m_EmssStateChanged.notify_all();
-    }
-    void OnSourceOpenPending() override {
-      ClLogMessage("EMSS::OnOpenPending\n");
-      std::unique_lock<std::mutex> lock(m_Instance->m_Mutex);
-      m_Instance->m_EmssReadyState = EmssReadyState::kOpenPending;
-      m_Instance->m_EmssStateChanged.notify_all();
-    }
-    void OnSourceOpen() override {
-      ClLogMessage("EMSS::OnOpen\n");
-      std::unique_lock<std::mutex> lock(m_Instance->m_Mutex);
-      m_Instance->m_EmssReadyState = EmssReadyState::kOpen;
-      m_Instance->m_EmssStateChanged.notify_all();
-    }
-
-    MoonlightInstance* m_Instance;
-  };
-
-  class MediaElementListener : public samsung::html::HTMLMediaElementListener {
-   public:
-    MediaElementListener(MoonlightInstance* i) : m_Instance(i) {}
-    void OnPlay() override {
-      // ClLogMessage("HTMLMediaElement::OnPlay\n");
-      // std::unique_lock<std::mutex> lock(m_Instance->m_Mutex);
-      // m_Instance->m_Started = true;
-      // m_Instance->m_EmssStateChanged.notify_all();
-    }
-
-   private:
-    MoonlightInstance* m_Instance;
-  };
-
-  class AudioTrackListener
-      : public samsung::wasm::ElementaryMediaTrackListener {
-   public:
-    AudioTrackListener(MoonlightInstance* i) : m_Instance(i) {}
-    void OnTrackOpen() override {
-      ClLogMessage("AUDIO ElementaryMediaTrack::OnTrackOpen\n");
-      std::unique_lock<std::mutex> lock(m_Instance->m_Mutex);
-      m_Instance->m_AudioStarted = true;
-      m_Instance->m_EmssAudioStateChanged.notify_all();
-    }
-
-    void OnTrackClosed(
-        samsung::wasm::ElementaryMediaTrack::CloseReason) override {
-      ClLogMessage("AUDIO ElementaryMediaTrack::OnTrackClosed\n");
-      std::unique_lock<std::mutex> lock(m_Instance->m_Mutex);
-      m_Instance->m_AudioStarted = false;
-    }
-
-    void OnSessionIdChanged(uint32_t new_session_id) override {
-      ClLogMessage("AUDIO ElementaryMediaTrack::OnSessionIdChanged\n");
-      std::unique_lock<std::mutex> lock(m_Instance->m_Mutex);
-      m_Instance->m_AudioSessionId.store(new_session_id);
-    }
-
-   private:
-    MoonlightInstance* m_Instance;
-  };
-
-  class VideoTrackListener
-      : public samsung::wasm::ElementaryMediaTrackListener {
-   public:
-    VideoTrackListener(MoonlightInstance* i) : m_Instance(i) {}
-      void OnTrackOpen() override {
-        ClLogMessage("VIDEO ElementaryMediaTrack::OnTrackOpen\n");
-        std::unique_lock<std::mutex> lock(m_Instance->m_Mutex);
-        m_Instance->m_VideoStarted = true;
-        m_Instance->m_RequestIdrFrame = true;
-        m_Instance->m_EmssVideoStateChanged.notify_all();
-      }
-
-    void OnTrackClosed(
-        samsung::wasm::ElementaryMediaTrack::CloseReason) override {
-      ClLogMessage("VIDEO ElementaryMediaTrack::OnTrackClosed\n");
-      std::unique_lock<std::mutex> lock(m_Instance->m_Mutex);
-      m_Instance->m_VideoStarted = false;
-    }
-
-    void OnSessionIdChanged(uint32_t new_session_id) override {
-      ClLogMessage("VIDEO ElementaryMediaTrack::OnSessionIdChanged\n");
-      std::unique_lock<std::mutex> lock(m_Instance->m_Mutex);
-      m_Instance->m_VideoSessionId.store(new_session_id);
-    }
-
-   private:
-    MoonlightInstance* m_Instance;
-  };
-
-  void waitFor(std::condition_variable* variable,
-               std::function<bool()> condition) {
-    std::unique_lock<std::mutex> lock(m_Mutex);
-    variable->wait(lock, condition);
-  }
-
   samsung::html::HTMLMediaElement m_MediaElement;
   samsung::wasm::ElementaryMediaStreamSource m_Source;
-  ElementaryMediaStreamSourceListener m_SourceListener;
-  MediaElementListener m_MediaElementListener;
+  SourceListener m_SourceListener;
   AudioTrackListener m_AudioTrackListener;
   VideoTrackListener m_VideoTrackListener;
   samsung::wasm::ElementaryMediaTrack m_VideoTrack;

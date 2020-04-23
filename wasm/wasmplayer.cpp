@@ -45,6 +45,82 @@ static std::chrono::time_point<std::chrono::steady_clock> s_firstAppend;
 static std::chrono::time_point<std::chrono::steady_clock> s_lastTime;
 static bool s_hasFirstFrame = false;
 
+MoonlightInstance::SourceListener::SourceListener(
+    MoonlightInstance* instance)
+  : m_Instance(instance) {}
+
+void MoonlightInstance::SourceListener::OnSourceClosed() {
+  ClLogMessage("EMSS::OnClosed\n");
+  std::unique_lock<std::mutex> lock(m_Instance->m_Mutex);
+  m_Instance->m_EmssReadyState = EmssReadyState::kClosed;
+  m_Instance->m_EmssStateChanged.notify_all();
+}
+
+void MoonlightInstance::SourceListener::OnSourceOpenPending() {
+  ClLogMessage("EMSS::OnOpenPending\n");
+  std::unique_lock<std::mutex> lock(m_Instance->m_Mutex);
+  m_Instance->m_EmssReadyState = EmssReadyState::kOpenPending;
+  m_Instance->m_EmssStateChanged.notify_all();
+}
+
+void MoonlightInstance::SourceListener::OnSourceOpen() {
+  ClLogMessage("EMSS::OnOpen\n");
+  std::unique_lock<std::mutex> lock(m_Instance->m_Mutex);
+  m_Instance->m_EmssReadyState = EmssReadyState::kOpen;
+  m_Instance->m_EmssStateChanged.notify_all();
+}
+
+MoonlightInstance::AudioTrackListener::AudioTrackListener(
+    MoonlightInstance* instance)
+  : m_Instance(instance) {}
+
+void MoonlightInstance::AudioTrackListener::OnTrackOpen() {
+  ClLogMessage("AUDIO ElementaryMediaTrack::OnTrackOpen\n");
+  std::unique_lock<std::mutex> lock(m_Instance->m_Mutex);
+  m_Instance->m_AudioStarted = true;
+  m_Instance->m_EmssAudioStateChanged.notify_all();
+}
+
+void MoonlightInstance::AudioTrackListener::OnTrackClosed(
+    samsung::wasm::ElementaryMediaTrack::CloseReason) {
+  ClLogMessage("AUDIO ElementaryMediaTrack::OnTrackClosed\n");
+  std::unique_lock<std::mutex> lock(m_Instance->m_Mutex);
+  m_Instance->m_AudioStarted = false;
+}
+
+void MoonlightInstance::AudioTrackListener::OnSessionIdChanged(
+    uint32_t new_session_id) {
+  ClLogMessage("AUDIO ElementaryMediaTrack::OnSessionIdChanged\n");
+  std::unique_lock<std::mutex> lock(m_Instance->m_Mutex);
+  m_Instance->m_AudioSessionId.store(new_session_id);
+}
+
+MoonlightInstance::VideoTrackListener::VideoTrackListener(
+    MoonlightInstance* instance)
+  : m_Instance(instance) {}
+
+void MoonlightInstance::VideoTrackListener::OnTrackOpen() {
+  ClLogMessage("VIDEO ElementaryMediaTrack::OnTrackOpen\n");
+  std::unique_lock<std::mutex> lock(m_Instance->m_Mutex);
+  m_Instance->m_VideoStarted = true;
+  m_Instance->m_RequestIdrFrame = true;
+  m_Instance->m_EmssVideoStateChanged.notify_all();
+}
+
+void MoonlightInstance::VideoTrackListener::OnTrackClosed(
+    samsung::wasm::ElementaryMediaTrack::CloseReason) {
+  ClLogMessage("VIDEO ElementaryMediaTrack::OnTrackClosed\n");
+  std::unique_lock<std::mutex> lock(m_Instance->m_Mutex);
+  m_Instance->m_VideoStarted = false;
+}
+
+void MoonlightInstance::VideoTrackListener::OnSessionIdChanged(
+    uint32_t new_session_id) {
+  ClLogMessage("VIDEO ElementaryMediaTrack::OnSessionIdChanged\n");
+  std::unique_lock<std::mutex> lock(m_Instance->m_Mutex);
+  m_Instance->m_VideoSessionId.store(new_session_id);
+}
+
 void MoonlightInstance::DidChangeFocus(bool got_focus) {
   // Request an IDR frame to dump the frame queue that may have
   // built up from the GL pipeline being stalled.
@@ -62,7 +138,7 @@ int MoonlightInstance::StartupVidDecSetup(int videoFormat, int width,
                                           void* context, int drFlags) {
   g_Instance->m_MediaElement.SetSrc(&g_Instance->m_Source);
   ClLogMessage("Waiting for closed\n");
-  g_Instance->waitFor(&g_Instance->m_EmssStateChanged, [] {
+  g_Instance->WaitFor(&g_Instance->m_EmssStateChanged, [] {
       return g_Instance->m_EmssReadyState == EmssReadyState::kClosed;
   });
   ClLogMessage("closed done\n");
@@ -100,7 +176,7 @@ int MoonlightInstance::StartupVidDecSetup(int videoFormat, int width,
 
   ClLogMessage("Inb4 source open\n");
   g_Instance->m_Source.Open([](EmssAsyncResult){});
-  g_Instance->waitFor(&g_Instance->m_EmssStateChanged, [] {
+  g_Instance->WaitFor(&g_Instance->m_EmssStateChanged, [] {
       return g_Instance->m_EmssReadyState == EmssReadyState::kOpenPending;
   });
   ClLogMessage("Source ready to open\n");
@@ -113,10 +189,10 @@ int MoonlightInstance::StartupVidDecSetup(int videoFormat, int width,
   });
 
   ClLogMessage("Waiting for start\n");
-  g_Instance->waitFor(&g_Instance->m_EmssAudioStateChanged,
+  g_Instance->WaitFor(&g_Instance->m_EmssAudioStateChanged,
                       [] { return g_Instance->m_AudioStarted.load(); });
 
-  g_Instance->waitFor(&g_Instance->m_EmssVideoStateChanged,
+  g_Instance->WaitFor(&g_Instance->m_EmssVideoStateChanged,
                       [] { return g_Instance->m_VideoStarted.load(); });
   ClLogMessage("started\n");
   return 0;
@@ -201,7 +277,6 @@ int MoonlightInstance::VidDecSubmitDecodeUnit(PDECODE_UNIT decodeUnit) {
   s_lastTime = now;
 
   // Start the decoding
-  uint32_t packedMillis = ProfilerGetPackedMillis();
   samsung::wasm::ElementaryMediaPacket pkt{
       s_pktPts,
       s_pktPts,
@@ -224,6 +299,12 @@ int MoonlightInstance::VidDecSubmitDecodeUnit(PDECODE_UNIT decodeUnit) {
   }
 
   return DR_OK;
+}
+
+void MoonlightInstance::WaitFor(std::condition_variable* variable,
+                                std::function<bool()> condition) {
+  std::unique_lock<std::mutex> lock(m_Mutex);
+  variable->wait(lock, condition);
 }
 
 DECODER_RENDERER_CALLBACKS MoonlightInstance::s_DrCallbacks = {
