@@ -19,8 +19,8 @@ using std::chrono_literals::operator""s;
 using std::chrono_literals::operator""ms;
 using EmssReadyState = samsung::wasm::ElementaryMediaStreamSource::ReadyState;
 using EmssAsyncResult
-    = samsung::wasm::ElementaryMediaStreamSource::AsyncOperationResult;
-using HTMLAsyncResult = samsung::html::HTMLMediaElement::AsyncOperationResult;
+    = samsung::wasm::ElementaryMediaStreamSource::AsyncResult;
+using HTMLAsyncResult = samsung::html::HTMLMediaElement::AsyncResult;
 using TimeStamp = samsung::wasm::Seconds;
 
 static constexpr TimeStamp kFrameTimeMargin = 0.5ms;
