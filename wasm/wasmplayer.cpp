@@ -89,7 +89,7 @@ void MoonlightInstance::AudioTrackListener::OnTrackClosed(
 }
 
 void MoonlightInstance::AudioTrackListener::OnSessionIdChanged(
-    uint32_t new_session_id) {
+    samsung::wasm::SessionId new_session_id) {
   ClLogMessage("AUDIO ElementaryMediaTrack::OnSessionIdChanged\n");
   std::unique_lock<std::mutex> lock(m_Instance->m_Mutex);
   m_Instance->m_AudioSessionId.store(new_session_id);
@@ -115,7 +115,7 @@ void MoonlightInstance::VideoTrackListener::OnTrackClosed(
 }
 
 void MoonlightInstance::VideoTrackListener::OnSessionIdChanged(
-    uint32_t new_session_id) {
+    samsung::wasm::SessionId new_session_id) {
   ClLogMessage("VIDEO ElementaryMediaTrack::OnSessionIdChanged\n");
   std::unique_lock<std::mutex> lock(m_Instance->m_Mutex);
   m_Instance->m_VideoSessionId.store(new_session_id);

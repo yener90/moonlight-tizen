@@ -34,7 +34,7 @@ static inline TimeStamp FrameDuration(double samplesPerFrame,
 }
 
 static void DecodeAndAppendPacket(samsung::wasm::ElementaryMediaTrack* track,
-                                  uint32_t session_id,
+                                  samsung::wasm::SessionId session_id,
                                   OpusMSDecoder* decoder,
                                   const unsigned char* sampleData,
                                   int sampleLength) {
