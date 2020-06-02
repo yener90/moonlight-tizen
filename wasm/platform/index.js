@@ -77,6 +77,7 @@ function loadWindowState() {
     return;
   }
 
+  console.log('restoring state');
   chrome.storage.sync.get('windowState', function(item) {
     // load stored window state
     windowState = (item && item.windowState) ?
@@ -231,60 +232,7 @@ function updateBitrateField() {
 }
 
 function moduleDidLoad() {
-  // load the HTTP cert and unique ID if we have one.
-  getData('cert', function(savedCert) {
-    if (savedCert.cert != null) { // we have a saved cert
-      pairingCert = savedCert.cert;
-    }
-
-    getData('uniqueid', function(savedUniqueid) {
-      // See comment on myUniqueid
-      /*if (savedUniqueid.uniqueid != null) { // we have a saved uniqueid
-        myUniqueid = savedUniqueid.uniqueid;
-      } else {
-        myUniqueid = uniqueid();
-        storeData('uniqueid', myUniqueid, null);
-      }*/
-
-      if (!pairingCert) { // we couldn't load a cert. Make one.
-        console.warn('%c[index.js, moduleDidLoad]', 'color: green;', 'Failed to load local cert. Generating new one');
-        sendMessage('makeCert', []).then(function(cert) {
-          storeData('cert', cert, null);
-          pairingCert = cert;
-          console.info('%c[index.js, moduleDidLoad]', 'color: green;', 'Generated new cert:', cert);
-        }, function(failedCert) {
-          console.error('%c[index.js, moduleDidLoad]', 'color: green;', 'Failed to generate new cert! Returned error was: \n', failedCert);
-        }).then(function(ret) {
-          sendMessage('httpInit', [pairingCert.cert, pairingCert.privateKey, myUniqueid]).then(function(ret) {
-            restoreUiAfterNaClLoad();
-          }, function(failedInit) {
-            console.error('%c[index.js, moduleDidLoad]', 'color: green;', 'Failed httpInit! Returned error was: ', failedInit);
-          });
-        });
-      } else {
-        sendMessage('httpInit', [pairingCert.cert, pairingCert.privateKey, myUniqueid]).then(function(ret) {
-          restoreUiAfterNaClLoad();
-        }, function(failedInit) {
-          console.error('%c[index.js, moduleDidLoad]', 'color: green;', 'Failed httpInit! Returned error was: ', failedInit);
-        });
-      }
-
-      // load previously connected hosts, which have been killed into an object, and revive them back into a class
-      getData('hosts', function(previousValue) {
-        hosts = previousValue.hosts != null ? previousValue.hosts : {};
-        for (var hostUID in hosts) { // programmatically add each new host.
-          var revivedHost = new NvHTTP(hosts[hostUID].address, myUniqueid, hosts[hostUID].userEnteredAddress);
-          revivedHost.serverUid = hosts[hostUID].serverUid;
-          revivedHost.externalIP = hosts[hostUID].externalIP;
-          revivedHost.hostname = hosts[hostUID].hostname;
-          revivedHost.ppkstr = hosts[hostUID].ppkstr;
-          addHostToGrid(revivedHost);
-        }
-        startPollingHosts();
-        console.log('%c[index.js]', 'color: green;', 'Loaded previously connected hosts');
-      });
-    });
-  });
+  loadHTTPCerts();
 }
 
 // pair to the given NvHTTP host object.  Returns whether pairing was successful.
@@ -948,6 +896,12 @@ function createObjectStore(dataBase) {
 }
 
 function openIndexDB(callback) {
+  if (db) {
+    // Database already opened
+    callback();
+    return;
+  }
+
   console.log('Opening IndexDB');
   if (navigator.storage && navigator.storage.persist) {
     navigator.storage.persisted().then(persistent=>{
@@ -1190,6 +1144,8 @@ function updateDefaultBitrate() {
 }
 
 function initSamsungKeys() {
+  console.log('initializing keys');
+
   var handler = {
     initRemoteController: true,
     buttonsToRegister: [
@@ -1215,16 +1171,17 @@ function initSamsungKeys() {
   platformOnLoad(handler);
 }
 
-function onWindowLoad() {
-  console.log('%c[index.js]', 'color: green;', 'Moonlight\'s main window loaded');
-  // don't show the game selection div
-  $('#gameSelection').css('display', 'none');
+function loadUserData() {
+  console.log('loading stored user data');
+  if (runningOnChrome()) {
+    loadUserDataCb();
+  } else {
+    openIndexDB(loadUserDataCb);
+  }
+}
 
-  initSamsungKeys();
-
-  loadWindowState();
-
-  // load stored resolution prefs
+function loadUserDataCb() {
+  console.log('load stored resolution prefs');
   getData('resolution', function(previousValue) {
     if (previousValue.resolution != null) {
       $('.resolutionMenu li').each(function() {
@@ -1235,7 +1192,7 @@ function onWindowLoad() {
     }
   });
 
-  // Load stored remote audio prefs
+  console.log('Load stored remote audio prefs');
   getData('remoteAudio', function(previousValue) {
     if (previousValue.remoteAudio == null) {
       document.querySelector('#externalAudioBtn').MaterialIconToggle.uncheck();
@@ -1246,7 +1203,7 @@ function onWindowLoad() {
     }
   });
 
-  // load stored framerate prefs
+  console.log('load stored framerate prefs');
   getData('frameRate', function(previousValue) {
     if (previousValue.frameRate != null) {
       $('.framerateMenu li').each(function() {
@@ -1257,7 +1214,7 @@ function onWindowLoad() {
     }
   });
 
-  // load stored optimization prefs
+  console.log('load stored optimization prefs');
   getData('optimize', function(previousValue) {
     if (previousValue.optimize == null) {
       document.querySelector('#optimizeGamesBtn').MaterialIconToggle.check();
@@ -1268,7 +1225,7 @@ function onWindowLoad() {
     }
   });
 
-  // load stored framePacing prefs
+  console.log('load stored framePacing prefs');
   getData('framePacing', function(previousValue) {
     if (previousValue.framePacing == null) {
       document.querySelector('#framePacingBtn').MaterialIconToggle.check();
@@ -1279,7 +1236,7 @@ function onWindowLoad() {
     }
   });
 
-  // load stored audioSync prefs
+  console.log('load stored audioSync prefs');
   getData('audioSync', function(previousValue) {
     if (previousValue.audioSync == null) {
       document.querySelector('#audioSyncBtn').MaterialIconToggle.check();
@@ -1290,11 +1247,86 @@ function onWindowLoad() {
     }
   });
 
-  // load stored bitrate prefs
+  console.log('load stored bitrate prefs');
   getData('bitrate', function(previousValue) {
     $('#bitrateSlider')[0].MaterialSlider.change(previousValue.bitrate != null ? previousValue.bitrate : '10');
     updateBitrateField();
   });
+}
+
+function loadHTTPCerts() {
+  if (runningOnChrome()) {
+    loadHTTPCertsCb();
+  } else {
+    openIndexDB(loadHTTPCertsCb);
+  }
+}
+
+function loadHTTPCertsCb() {
+  console.log('load the HTTP cert and unique ID if we have one.');
+  getData('cert', function(savedCert) {
+    if (savedCert.cert != null) { // we have a saved cert
+      pairingCert = savedCert.cert;
+    }
+
+    getData('uniqueid', function(savedUniqueid) {
+      // See comment on myUniqueid
+      /*if (savedUniqueid.uniqueid != null) { // we have a saved uniqueid
+        myUniqueid = savedUniqueid.uniqueid;
+      } else {
+        myUniqueid = uniqueid();
+        storeData('uniqueid', myUniqueid, null);
+      }*/
+
+      if (!pairingCert) { // we couldn't load a cert. Make one.
+        console.warn('%c[index.js, moduleDidLoad]', 'color: green;', 'Failed to load local cert. Generating new one');
+        sendMessage('makeCert', []).then(function(cert) {
+          storeData('cert', cert, null);
+          pairingCert = cert;
+          console.info('%c[index.js, moduleDidLoad]', 'color: green;', 'Generated new cert:', cert);
+        }, function(failedCert) {
+          console.error('%c[index.js, moduleDidLoad]', 'color: green;', 'Failed to generate new cert! Returned error was: \n', failedCert);
+        }).then(function(ret) {
+          sendMessage('httpInit', [pairingCert.cert, pairingCert.privateKey, myUniqueid]).then(function(ret) {
+            restoreUiAfterNaClLoad();
+          }, function(failedInit) {
+            console.error('%c[index.js, moduleDidLoad]', 'color: green;', 'Failed httpInit! Returned error was: ', failedInit);
+          });
+        });
+      } else {
+        sendMessage('httpInit', [pairingCert.cert, pairingCert.privateKey, myUniqueid]).then(function(ret) {
+          restoreUiAfterNaClLoad();
+        }, function(failedInit) {
+          console.error('%c[index.js, moduleDidLoad]', 'color: green;', 'Failed httpInit! Returned error was: ', failedInit);
+        });
+      }
+
+      // load previously connected hosts, which have been killed into an object, and revive them back into a class
+      getData('hosts', function(previousValue) {
+        hosts = previousValue.hosts != null ? previousValue.hosts : {};
+        for (var hostUID in hosts) { // programmatically add each new host.
+          var revivedHost = new NvHTTP(hosts[hostUID].address, myUniqueid, hosts[hostUID].userEnteredAddress);
+          revivedHost.serverUid = hosts[hostUID].serverUid;
+          revivedHost.externalIP = hosts[hostUID].externalIP;
+          revivedHost.hostname = hosts[hostUID].hostname;
+          revivedHost.ppkstr = hosts[hostUID].ppkstr;
+          addHostToGrid(revivedHost);
+        }
+        startPollingHosts();
+        console.log('%c[index.js]', 'color: green;', 'Loaded previously connected hosts');
+      });
+    });
+  });
+}
+
+function onWindowLoad() {
+  console.log('%c[index.js]', 'color: green;', 'Moonlight\'s main window loaded');
+  // don't show the game selection div
+  $('#gameSelection').css('display', 'none');
+
+  initSamsungKeys();
+  loadWindowState();
+  loadUserData();
 }
 
 window.onload = onWindowLoad;
