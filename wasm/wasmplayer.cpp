@@ -18,9 +18,7 @@
 using std::chrono_literals::operator""s;
 using std::chrono_literals::operator""ms;
 using EmssReadyState = samsung::wasm::ElementaryMediaStreamSource::ReadyState;
-using EmssAsyncResult
-    = samsung::wasm::ElementaryMediaStreamSource::AsyncResult;
-using HTMLAsyncResult = samsung::html::HTMLMediaElement::AsyncResult;
+using EmssOperationResult = samsung::wasm::OperationResult;
 using TimeStamp = samsung::wasm::Seconds;
 
 static constexpr TimeStamp kFrameTimeMargin = 0.5ms;
@@ -175,13 +173,13 @@ int MoonlightInstance::StartupVidDecSetup(int videoFormat, int width,
   }
 
   ClLogMessage("Inb4 source open\n");
-  g_Instance->m_Source.Open([](EmssAsyncResult){});
+  g_Instance->m_Source.Open([](EmssOperationResult){});
   g_Instance->WaitFor(&g_Instance->m_EmssStateChanged, [] {
       return g_Instance->m_EmssReadyState == EmssReadyState::kOpenPending;
   });
   ClLogMessage("Source ready to open\n");
-  g_Instance->m_MediaElement.Play([](HTMLAsyncResult err) {
-    if (err != HTMLAsyncResult::kSuccess) {
+  g_Instance->m_MediaElement.Play([](EmssOperationResult err) {
+    if (err != EmssOperationResult::kSuccess) {
       ClLogMessage("Play error\n");
     } else {
       ClLogMessage("Play success\n");
