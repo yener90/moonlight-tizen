@@ -1,9 +1,8 @@
-cmake_minimum_required(VERSION 3.15)
+cmake_minimum_required(VERSION 3.10)
 
 project(MoonlightWasm VERSION 1.0)
 
-add_compile_options(-w -s WASM=1 -fno-ident -Os -flto)
-add_compile_definitions(SAMSUNG_WRT OS_WASM NDEBUG)
+add_compile_options(-w -s WASM=1 -fno-ident -Os -flto -DSAMSUNG_WRT -DOS_WASM -DNDEBUG)
 
 add_library(moonlight-rs STATIC
     moonlight-common-c/reedsolomon/rs.c)
@@ -57,9 +56,10 @@ target_include_directories(moonlight-common-c PUBLIC
     moonlight-common-c/enet/include
     moonlight-common-c/reedsolomon)
 target_compile_features(moonlight-common-c PUBLIC c_std_99)
-target_compile_options(moonlight-common-c PUBLIC
-    "SHELL:-s USE_CRYPTO=1"
-    "SHELL:-s USE_SSL=1")
+set_target_properties(moonlight-common-c
+    PROPERTIES
+        COMPILE_FLAGS
+            "-s USE_CRYPTO=1 -s USE_SSL=1")
 
 add_library(libgamestream STATIC
     libgamestream/http.c
@@ -68,10 +68,10 @@ add_library(libgamestream STATIC
 )
 target_include_directories(libgamestream PUBLIC
     libgamestream)
-target_compile_options(libgamestream PUBLIC
-    "SHELL:-s USE_CRYPTO=1"
-    "SHELL:-s USE_SSL=1"
-    "SHELL:-s USE_CURL=1")
+set_target_properties(libgamestream
+    PROPERTIES
+        COMPILE_FLAGS
+            "-s USE_CRYPTO=1 -s USE_SSL=1 -s USE_CURL=1")
 
 add_library(h264bitstream STATIC
     h264bitstream/h264_nal.c
@@ -251,26 +251,28 @@ target_include_directories(moonlight-wasm PUBLIC
     opus/silk/fixed
     opus/celt
 )
-target_compile_options(moonlight-wasm PUBLIC
-    "SHELL:-s USE_CRYPTO=1"
-    "SHELL:-s USE_SSL=1"
-    "SHELL:-s USE_CURL=1")
+set_target_properties(moonlight-wasm
+    PROPERTIES
+        COMPILE_FLAGS
+            "-s USE_CRYPTO=1 -s USE_SSL=1 -s USE_CURL=1")
 target_compile_features(moonlight-wasm PUBLIC cxx_std_17)
-target_link_options(moonlight-wasm PUBLIC
-    --bind
-    -pthread
-    -Os
-    -flto
-    "SHELL:-s TOTAL_MEMORY=134217728"
-    "SHELL:-s TOTAL_STACK=16777216"
-    "SHELL:-s NO_EXIT_RUNTIME=1"
-    "SHELL:-s USE_PTHREADS=1"
-    "SHELL:-s PTHREAD_POOL_SIZE=20"
-    "SHELL:-s WASM=1"
-    "SHELL:-s ENVIRONMENT_MAY_BE_TIZEN"
-    "SHELL:-s USE_CRYPTO=1"
-    "SHELL:-s USE_SSL=1"
-    "SHELL:-s USE_CURL=1")
+set_target_properties(moonlight-wasm
+    PROPERTIES
+        LINK_FLAGS
+            "--bind \
+             -pthread \
+             -Os \
+             -flto \
+             -s TOTAL_MEMORY=134217728 \
+             -s TOTAL_STACK=16777216 \
+             -s NO_EXIT_RUNTIME=1 \
+             -s USE_PTHREADS=1 \
+             -s PTHREAD_POOL_SIZE=20 \
+             -s WASM=1 \
+             -s ENVIRONMENT_MAY_BE_TIZEN \
+             -s USE_CRYPTO=1 \
+             -s USE_SSL=1 \
+             -s USE_CURL=1")
 target_link_libraries(moonlight-wasm PUBLIC
     libgamestream
     h264bitstream

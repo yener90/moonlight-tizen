@@ -16,7 +16,7 @@ Tizen TVs. Changes made:
 
 Required software:
 - [Samsung Emscripten fork](https://developer.samsung.com/smarttv/develop/extension-libraries/webassembly/getting-started/downloading-and-installing.html)
-- cmake (at least 3.15 - tested using CMake 3.16)
+- cmake (at least 3.10 - tested using CMake 3.10 and CMake 3.18)
 - ninja (at least 1.8.2- recommended for Windows)
 
 After that run:
@@ -27,8 +27,10 @@ cd build/
 cmake -DCMAKE_TOOLCHAIN_FILE=<YOUR EMSCRIPTEN INSTALLATION_DIR>/cmake/Modules/Platform/Emscripten.cmake -G Ninja ..
 ninja
 
-mkdir widget/
-cd widget/
+# CMake 3.10 (and above):
+cmake -DCMAKE_INSTALL_PREFIX=. -P cmake_install.cmake
+
+# CMake 3.15 (and above):
 cmake --install . --prefix .
 ```
 
