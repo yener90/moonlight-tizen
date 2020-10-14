@@ -12,14 +12,23 @@ Tizen TVs. Changes made:
 - [Tizen WASM Player](https://developer.samsung.com/smarttv/develop/extension-libraries/webassembly/tizen-wasm-player/overview.html)
 - [Tizen Sockets Extension](https://developer.samsung.com/smarttv/develop/extension-libraries/webassembly/api-reference/tizen-sockets-extension.html)
 
+## Checking out required submodules
+Since some of the dependencies used are provided as git submodules,
+after cloning this repository (if you did not provide the `--recurse-submodules`
+option while cloning) you need to issue the below command:
+
+```bash
+git submodule update --init --recursive
+```
+
 ## Building
 
-Required software:
+### Required software
 - [Samsung Emscripten fork](https://developer.samsung.com/smarttv/develop/extension-libraries/webassembly/getting-started/downloading-and-installing.html)
 - cmake (at least 3.10 - tested using CMake 3.10 and CMake 3.18)
 - ninja (at least 1.8.2- recommended for Windows)
 
-After that run:
+### Build procedure
 
 ```bash
 mkdir build
